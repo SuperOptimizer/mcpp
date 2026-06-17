@@ -22,6 +22,7 @@
 #include "mcpp/archive/chunk.hpp"
 #include "mcpp/cache/block_key.hpp"
 #include "mcpp/cache/cache.hpp"
+#include "mcpp/codec/convert.hpp"
 #include "mcpp/codec/mask_block.hpp"
 #include "mcpp/core/dtype.hpp"
 
