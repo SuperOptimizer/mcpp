@@ -59,6 +59,11 @@ constexpr int coeff_band(std::size_t lin) {
 template <std::size_t N, std::size_t Rank>
 constexpr int max_band() { return int(Rank * (N - 1)); }
 
+template <std::size_t N, std::size_t Rank>
+consteval std::size_t block_total_q() {
+    std::size_t t = 1; for (std::size_t a = 0; a < Rank; ++a) t *= N; return t;
+}
+
 // The quantization step for a coefficient at band `band`, given quality `q`.
 // Larger q => larger step => more compression, lower quality.
 template <std::size_t N, std::size_t Rank>
@@ -92,30 +97,55 @@ constexpr float dequantize(std::int32_t i, float step) {
 }
 
 // ---- whole-block quant / dequant -----------------------------------------
+//
+// Perf: step_for() calls std::pow per coefficient (band_weight), which was ~44%
+// of decode and a big chunk of encode (4096 powf/block). There are only
+// max_band+1 distinct bands, so we build a per-band step table ONCE per block
+// (a few dozen powf) and index it in the hot loop. Per-position band is cheap
+// integer work. We also precompute a per-position step pointer-free table to
+// keep the inner loop branch-light.
 
-// Quantize an N^Rank block of DCT coefficients in place... but we need both the
-// integer indices (for entropy coding) and to keep the float buffer free. So the
-// block versions write indices to a separate int buffer.
+template <std::size_t N, std::size_t Rank>
+struct StepTable {
+    static constexpr int kBands = Rank * (N - 1) + 1;
+    std::array<float, kBands> step{};   // step per band
+    std::array<float, kBands> rstep{};  // 1/step (for quantize: a*rstep)
+    explicit StepTable(float q) {
+        for (int b = 0; b < kBands; ++b) {
+            step[std::size_t(b)] = step_for<N, Rank>(b, q);
+            rstep[std::size_t(b)] = step[std::size_t(b)] > 0.0f
+                                  ? 1.0f / step[std::size_t(b)] : 0.0f;
+        }
+    }
+};
 
 template <std::size_t N, std::size_t Rank>
 void quantize_block(const float* coeffs, std::int32_t* indices, float q) {
-    constexpr std::size_t total = [] {
-        std::size_t t = 1; for (std::size_t a = 0; a < Rank; ++a) t *= N; return t;
-    }();
+    constexpr std::size_t total = block_total_q<N, Rank>();
+    const StepTable<N, Rank> tbl(q);
     for (std::size_t i = 0; i < total; ++i) {
         const int band = coeff_band<N, Rank>(i);
-        indices[i] = quantize(coeffs[i], step_for<N, Rank>(band, q));
+        const float rstep = tbl.rstep[std::size_t(band)];
+        const float c = coeffs[i];
+        const float t = std::fabs(c) * rstep;
+        if (t < kDeadZoneFrac) { indices[i] = 0; continue; }
+        std::int32_t mag = std::int32_t((t - kDeadZoneFrac) + 1.0f);
+        indices[i] = (c < 0.0f) ? -mag : mag;
     }
 }
 
 template <std::size_t N, std::size_t Rank>
 void dequantize_block(const std::int32_t* indices, float* coeffs, float q) {
-    constexpr std::size_t total = [] {
-        std::size_t t = 1; for (std::size_t a = 0; a < Rank; ++a) t *= N; return t;
-    }();
+    constexpr std::size_t total = block_total_q<N, Rank>();
+    const StepTable<N, Rank> tbl(q);
+    constexpr float bias = kDeadZoneFrac + kReconOffset;
     for (std::size_t i = 0; i < total; ++i) {
+        const std::int32_t idx = indices[i];
+        if (idx == 0) { coeffs[i] = 0.0f; continue; }
         const int band = coeff_band<N, Rank>(i);
-        coeffs[i] = dequantize(indices[i], step_for<N, Rank>(band, q));
+        const std::int32_t mag = (idx < 0) ? -idx : idx;
+        const float r = (float(mag - 1) + bias) * tbl.step[std::size_t(band)];
+        coeffs[i] = (idx < 0) ? -r : r;
     }
 }
 
