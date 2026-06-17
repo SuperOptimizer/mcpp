@@ -71,3 +71,9 @@ Testing/
 # mcpp build
 /build/
 gcm.cache/
+
+# fuzz artifacts
+crash-*
+leak-*
+timeout-*
+oom-*

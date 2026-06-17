@@ -51,13 +51,26 @@
         "CMAKE_BUILD_TYPE": "Release",
         "MCPP_FAST_MATH": "ON"
       }
+    },
+    {
+      "name": "clang-fuzz",
+      "inherits": "base",
+      "displayName": "Clang fuzz targets (libFuzzer + ASan/UBSan)",
+      "environment": { "CXX": "clang++", "CC": "clang" },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MCPP_BUILD_TESTS": "OFF",
+        "MCPP_FUZZ": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "clang-debug",   "configurePreset": "clang-debug" },
     { "name": "clang-release", "configurePreset": "clang-release" },
     { "name": "gcc-debug",     "configurePreset": "gcc-debug" },
-    { "name": "gcc-release",   "configurePreset": "gcc-release" }
+    { "name": "gcc-release",   "configurePreset": "gcc-release" },
+    { "name": "clang-fuzz",    "configurePreset": "clang-fuzz" }
   ],
   "testPresets": [
     { "name": "clang-debug",   "configurePreset": "clang-debug",   "output": { "outputOnFailure": true } },

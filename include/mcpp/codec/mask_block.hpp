@@ -70,21 +70,32 @@ std::size_t encode_mask_block_framed(const float* voxels, const std::uint8_t* ma
 
 // Decode a framed mask-aware block. Forces air->0 (exact) and material away from
 // 0, both via integer mask compares outside the float transform.
+//
+// HARDENED (fuzz-driven, design memory mcpp-scope): all framing reads are
+// bounds-checked against `len`. On ANY malformed input the block decodes to all
+// zeros rather than reading out of bounds — decode of untrusted bytes never
+// crashes. (The RangeDecoder already returns 0 past end-of-buffer.)
 template <std::size_t N, std::size_t Rank>
 void decode_mask_block_framed(const std::uint8_t* payload, std::size_t len,
                               float q, float* voxels) {
     constexpr std::size_t total = block_total<N, Rank>();
+    for (std::size_t i = 0; i < total; ++i) voxels[i] = 0.0f;  // safe default
+
     auto get_u32 = [&](std::size_t at) {
         return std::uint32_t(payload[at]) | (std::uint32_t(payload[at + 1]) << 8) |
                (std::uint32_t(payload[at + 2]) << 16) | (std::uint32_t(payload[at + 3]) << 24);
     };
 
+    // framing: [u32 mlen][mlen bytes][u32 clen][clen bytes], all within `len`.
     std::size_t off = 0;
+    if (off + 4 > len) return;
     const std::uint32_t mlen = get_u32(off); off += 4;
+    if (mlen > len || off + mlen > len) return;
     const std::uint8_t* mptr = payload + off; off += mlen;
+    if (off + 4 > len) return;
     const std::uint32_t clen = get_u32(off); off += 4;
+    if (clen > len || off + clen > len) return;
     const std::uint8_t* cptr = payload + off; off += clen;
-    (void)len;
 
     // 1. recover the mask exactly
     std::vector<std::uint8_t> mask(total);

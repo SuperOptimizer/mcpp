@@ -62,7 +62,10 @@ inline void encode_magnitude(RangeEncoder& enc, CoefModel& mdl, std::uint32_t m)
 
 inline std::uint32_t decode_magnitude(RangeDecoder& dec, CoefModel& mdl) {
     int k = 0;
-    while (dec.decode_bit(mdl.mag_cont[std::size_t(k < 16 ? k : 15)]) == 1) ++k;
+    // Cap the unary prefix: a real magnitude fits in 31 bits. On adversarial
+    // input the range coder can emit a runaway of 1-bits past end-of-buffer;
+    // capping keeps decode bounded (hardened-decoder invariant).
+    while (k < 31 && dec.decode_bit(mdl.mag_cont[std::size_t(k < 16 ? k : 15)]) == 1) ++k;
     std::uint32_t v = 0;
     for (int b = 0; b < k; ++b) v = (v << 1) | std::uint32_t(dec.decode_bypass());
     return v + 1;  // m = v+1

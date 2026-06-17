@@ -14,6 +14,7 @@ endif()
 option(MCPP_BUILD_TESTS "Build mcpp tests" ON)
 option(MCPP_FAST_MATH "Build with -ffast-math (expected production mode)" OFF)
 option(MCPP_ASAN "Build with AddressSanitizer + UBSan" OFF)
+option(MCPP_FUZZ "Build fuzz targets (Clang/libFuzzer only)" OFF)
 
 # ---- the library: header-only foundations for now ----
 add_library(mcpp INTERFACE)
@@ -42,4 +43,8 @@ endif()
 if(MCPP_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+if(MCPP_FUZZ)
+  add_subdirectory(fuzz)
 endif()
