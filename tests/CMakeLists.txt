@@ -16,3 +16,4 @@ mcpp_add_test(test_dtype)
 mcpp_add_test(test_toleration)  # exercises the test framework's own comparators
 mcpp_add_test(test_dct)
 mcpp_add_test(test_quant)
+mcpp_add_test(test_range_coder)
