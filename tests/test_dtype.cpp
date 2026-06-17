@@ -27,14 +27,14 @@ MCPP_TEST("dtype: round-trip type <-> tag") {
     static_assert(dtype_of_v<std::uint8_t>  == Dtype::u8);
     static_assert(dtype_of_v<std::int16_t>  == Dtype::s16);
     static_assert(dtype_of_v<float>         == Dtype::f32);
-    static_assert(dtype_of_v<f16>           == Dtype::f16);
+    static_assert(dtype_of_v<float16>       == Dtype::f16);
     MCPP_CHECK(true);
 }
 
 MCPP_TEST("dtype: compute_t is f32 for every supported type") {
     static_assert(std::is_same_v<compute_t<std::uint8_t>,  float>);
     static_assert(std::is_same_v<compute_t<std::uint32_t>, float>);
-    static_assert(std::is_same_v<compute_t<f16>,           float>);
+    static_assert(std::is_same_v<compute_t<float16>,           float>);
     static_assert(std::is_same_v<compute_t<float>,         float>);
     MCPP_CHECK(true);
 }
@@ -42,7 +42,7 @@ MCPP_TEST("dtype: compute_t is f32 for every supported type") {
 MCPP_TEST("dtype: Sample concept accepts exactly the 8 types") {
     static_assert(Sample<std::uint8_t>);
     static_assert(Sample<std::int32_t>);
-    static_assert(Sample<f16>);
+    static_assert(Sample<float16>);
     static_assert(Sample<float>);
     static_assert(!Sample<double>);        // 64-bit deferred
     static_assert(!Sample<std::uint64_t>); // 64-bit deferred

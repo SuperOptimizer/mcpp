@@ -19,7 +19,7 @@ namespace mcpp {
 // f16: C++26 std::float16_t lives in <stdfloat> but is unevenly available on
 // libstdc++ today. _Float16 is supported by both Clang 21 and GCC 15 as an
 // extension and is what we use until <stdfloat> is reliable on both.
-using f16 = _Float16;
+using float16 = _Float16;
 
 // ---- runtime dtype tag (the open()-time dispatch switch) ------------------
 
@@ -61,7 +61,7 @@ template <> struct dtype_of<std::uint32_t> { static constexpr Dtype value = Dtyp
 template <> struct dtype_of<std::int8_t>   { static constexpr Dtype value = Dtype::s8;  };
 template <> struct dtype_of<std::int16_t>  { static constexpr Dtype value = Dtype::s16; };
 template <> struct dtype_of<std::int32_t>  { static constexpr Dtype value = Dtype::s32; };
-template <> struct dtype_of<f16>           { static constexpr Dtype value = Dtype::f16; };
+template <> struct dtype_of<float16>           { static constexpr Dtype value = Dtype::f16; };
 template <> struct dtype_of<float>         { static constexpr Dtype value = Dtype::f32; };
 
 template <class T>
