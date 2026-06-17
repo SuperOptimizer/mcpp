@@ -14,3 +14,4 @@ mcpp_add_test(test_fpbits)
 mcpp_add_test(test_mdview)
 mcpp_add_test(test_dtype)
 mcpp_add_test(test_toleration)  # exercises the test framework's own comparators
+mcpp_add_test(test_dct)
