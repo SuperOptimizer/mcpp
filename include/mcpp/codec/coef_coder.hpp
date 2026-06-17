@@ -24,17 +24,56 @@ namespace mcpp::codec {
 
 // Number of band buckets for context selection (DC + a few frequency bands).
 inline constexpr int kBandBuckets = 8;
+inline constexpr int kMagContexts = 16;
+// total adaptive contexts in a CoefModel: sig + eob + mag_cont
+inline constexpr int kNumPriors = kBandBuckets + kBandBuckets + kMagContexts;  // 32
 
-// Adaptive context model shared by encoder and decoder. Reset (default-init)
-// per block — blocks are self-contained (no cross-block entropy state).
+// Per-context initial P(bit==0), 11-bit fixed point. TRAINED priors replace the
+// flat p=0.5 (=1024) default: a well-calibrated start means the per-block coder
+// (contexts reset every block — self-contained invariant) doesn't waste bits
+// adapting from scratch. Layout: [0,8)=sig, [8,16)=eob, [16,32)=mag_cont.
+struct Priors {
+    std::array<std::uint16_t, kNumPriors> p0{};
+};
+
+// Flat (untrained) priors: p=0.5 everywhere. Kept for reference/testing.
+consteval Priors flat_priors() {
+    Priors pr{};
+    for (auto& v : pr.p0) v = std::uint16_t(kProbInit);  // 1024
+    return pr;
+}
+
+// TRAINED priors — FROZEN, baked once from representative PHercParis4 scroll data
+// (bench/gen_priors, 32768 blocks pooled across q={1,2,3,4,6,9,12,20}). These
+// seed every block's contexts (blocks reset per-block — self-contained), so the
+// adaptive coder starts calibrated instead of from p=0.5. ONE-TIME/build-time;
+// the codec does NO runtime calibration. Layout: [0,8)=sig [8,16)=eob [16,32)=mag.
+// Regenerate with bench/gen_priors if the data distribution changes.
+inline constexpr Priors kTrainedPriors{{{
+     164,  752, 1333, 1625, 1807, 1933, 1990, 1733,
+       1,    1,    3,    4,   13,   80, 1347, 2047,
+    1042,  713,  866,  972, 1041, 1086, 1104, 1069,
+     959,  873,  852,  995, 1316, 1891, 2047, 1024,
+}}};
+
+// The codec default IS the trained table.
+consteval Priors default_priors() { return kTrainedPriors; }
+
+// Adaptive context model shared by encoder and decoder. Reset per block (seeded
+// from priors) — blocks are self-contained (no cross-block entropy state).
 struct CoefModel {
-    // significance: P(coeff at this scan step is zero), bucketed by band.
     std::array<BitContext, kBandBuckets> sig{};
-    // EOB: P(more nonzeros follow) bucketed by band.
     std::array<BitContext, kBandBuckets> eob{};
-    // magnitude unary continuation contexts (geometric prefix).
-    std::array<BitContext, 16> mag_cont{};
-    // magnitude remainder bits are bypass.
+    std::array<BitContext, kMagContexts> mag_cont{};
+
+    CoefModel() { seed(default_priors()); }
+    explicit CoefModel(const Priors& pr) { seed(pr); }
+
+    void seed(const Priors& pr) {
+        for (int i = 0; i < kBandBuckets; ++i) sig[std::size_t(i)].p0 = pr.p0[std::size_t(i)];
+        for (int i = 0; i < kBandBuckets; ++i) eob[std::size_t(i)].p0 = pr.p0[std::size_t(kBandBuckets+i)];
+        for (int i = 0; i < kMagContexts; ++i) mag_cont[std::size_t(i)].p0 = pr.p0[std::size_t(2*kBandBuckets+i)];
+    }
 
     static int bucket_for_band(int band, int max_band) {
         if (max_band <= 0) return 0;

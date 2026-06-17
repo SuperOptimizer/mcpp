@@ -27,9 +27,11 @@
 namespace mcpp::codec {
 
 // Encode one N^Rank f32 block at quality q. Appends the payload to `out` and
-// returns the number of bytes written.
+// returns the number of bytes written. `pr` seeds the entropy contexts (trained
+// priors); decode MUST use the same priors.
 template <std::size_t N, std::size_t Rank>
-std::size_t encode_block(const float* voxels, float q, std::vector<std::uint8_t>& out) {
+std::size_t encode_block(const float* voxels, float q, std::vector<std::uint8_t>& out,
+                         const Priors& pr = default_priors()) {
     constexpr std::size_t total = block_total<N, Rank>();
 
     // forward transform (on a scratch copy; caller's buffer untouched)
@@ -43,20 +45,22 @@ std::size_t encode_block(const float* voxels, float q, std::vector<std::uint8_t>
     // entropy code
     const std::size_t before = out.size();
     RangeEncoder enc(out);
-    CoefModel mdl;  // reset per block (self-contained)
+    CoefModel mdl(pr);  // reset per block, seeded from priors (self-contained)
     encode_coeffs<N, Rank>(enc, mdl, idx.data());
     enc.finish();
     return out.size() - before;
 }
 
-// Decode one N^Rank block from `payload` at quality q into `voxels` (f32).
+// Decode one N^Rank block from `payload` at quality q into `voxels` (f32). `pr`
+// MUST match the priors used at encode time.
 template <std::size_t N, std::size_t Rank>
-void decode_block(const std::uint8_t* payload, std::size_t len, float q, float* voxels) {
+void decode_block(const std::uint8_t* payload, std::size_t len, float q, float* voxels,
+                  const Priors& pr = default_priors()) {
     constexpr std::size_t total = block_total<N, Rank>();
 
     std::vector<std::int32_t> idx(total);
     RangeDecoder dec(payload, len);
-    CoefModel mdl;  // identical reset state as the encoder
+    CoefModel mdl(pr);  // identical seed state as the encoder
     decode_coeffs<N, Rank>(dec, mdl, idx.data());
 
     dequantize_block<N, Rank>(idx.data(), voxels, q);
