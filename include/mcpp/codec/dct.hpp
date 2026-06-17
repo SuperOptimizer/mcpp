@@ -64,11 +64,15 @@ constexpr void axis_transform(float* buf, std::size_t ax, bool forward) {
         for (std::size_t i = 0; i < N; ++i) in[i] = buf[base + i * stride];
 
         if (forward) {
-            // X[k] = sum_n C[k][n] in[n]
-            for (std::size_t k = 0; k < N; ++k) {
-                float acc = 0.0f;
-                for (std::size_t n = 0; n < N; ++n) acc += C[k * N + n] * in[n];
-                out[k] = acc;
+            // X[k] = sum_n C[k][n] in[n], computed output-parallel (SAXPY): for
+            // each input n, scatter-add in[n]*C[k][n] across all outputs k. The
+            // outer-n / inner-k shape is the one the compiler vectorizes well
+            // (same structure as the fast inverse below), unlike the inner-n
+            // horizontal reduction which compiled ~6x slower.
+            for (std::size_t k = 0; k < N; ++k) out[k] = 0.0f;
+            for (std::size_t n = 0; n < N; ++n) {
+                const float s = in[n];
+                for (std::size_t k = 0; k < N; ++k) out[k] += s * C[k * N + n];
             }
         } else {
             // x[n] = sum_k C[k][n] X[k]   (transpose apply)
