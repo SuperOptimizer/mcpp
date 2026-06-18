@@ -77,3 +77,6 @@ crash-*
 leak-*
 timeout-*
 oom-*
+
+# CI workflow kept local (push blocked: credential lacks workflow scope)
+.github/workflows/
