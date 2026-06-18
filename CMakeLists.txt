@@ -15,6 +15,7 @@ option(MCPP_BUILD_TESTS "Build mcpp tests" ON)
 option(MCPP_FAST_MATH "Build with -ffast-math (expected production mode)" OFF)
 option(MCPP_ASAN "Build with AddressSanitizer + UBSan" OFF)
 option(MCPP_FUZZ "Build fuzz targets (Clang/libFuzzer only)" OFF)
+option(MCPP_NATIVE "Build with -march=native (enables SIMD DCT kernels)" OFF)
 
 # ---- the library: header-only foundations for now ----
 add_library(mcpp INTERFACE)
@@ -32,6 +33,13 @@ if(MCPP_FAST_MATH)
   # Project decision: -ffast-math is an expected production build mode.
   # NaN/Inf detection therefore goes through mcpp::fpbits bit-twiddling, never std::isnan.
   target_compile_options(mcpp INTERFACE -ffast-math)
+endif()
+
+if(MCPP_NATIVE)
+  # Enable host-native ISA (AVX-512/AVX2/FMA on x86, NEON on ARM) so the
+  # explicit-SIMD DCT-16 kernels in dct_simd.hpp are actually compiled. Without
+  # this the codec silently uses the scalar fallback.
+  target_compile_options(mcpp INTERFACE -march=native)
 endif()
 
 if(MCPP_ASAN)

@@ -14,6 +14,7 @@
 #define MCPP_CODEC_DCT_HPP
 
 #include "mcpp/codec/dct_tables.hpp"
+#include "mcpp/codec/dct_simd.hpp"
 
 #include <array>
 #include <cstddef>
@@ -89,25 +90,35 @@ constexpr void axis_transform(float* buf, std::size_t ax, bool forward) {
 
 }  // namespace detail
 
-// Forward separable DCT-II, in place, over an N^Rank cubic block.
+// Forward separable DCT-II, in place, over an N^Rank cubic block. The 3D 16^3
+// path uses the explicit-SIMD multi-line kernel (AVX-512/AVX2/NEON); other
+// configs (2D 64^2) use the generic SAXPY kernel.
 template <std::size_t N, std::size_t Rank>
-constexpr void forward_dct(float* block) {
-    for (std::size_t ax = 0; ax < Rank; ++ax)
-        detail::axis_transform<N, Rank>(block, ax, /*forward=*/true);
+inline void forward_dct(float* block) {
+    if constexpr (N == 16 && Rank == 3) {
+        simd::dct3d16(block, /*forward=*/true);
+    } else {
+        for (std::size_t ax = 0; ax < Rank; ++ax)
+            detail::axis_transform<N, Rank>(block, ax, /*forward=*/true);
+    }
 }
 
 // Inverse separable DCT-III, in place, over an N^Rank cubic block.
 template <std::size_t N, std::size_t Rank>
-constexpr void inverse_dct(float* block) {
-    for (std::size_t ax = 0; ax < Rank; ++ax)
-        detail::axis_transform<N, Rank>(block, ax, /*forward=*/false);
+inline void inverse_dct(float* block) {
+    if constexpr (N == 16 && Rank == 3) {
+        simd::dct3d16(block, /*forward=*/false);
+    } else {
+        for (std::size_t ax = 0; ax < Rank; ++ax)
+            detail::axis_transform<N, Rank>(block, ax, /*forward=*/false);
+    }
 }
 
 // Convenience: the codec's two configurations.
-constexpr void forward_dct3_16(float* block) { forward_dct<16, 3>(block); }
-constexpr void inverse_dct3_16(float* block) { inverse_dct<16, 3>(block); }
-constexpr void forward_dct2_64(float* block) { forward_dct<64, 2>(block); }
-constexpr void inverse_dct2_64(float* block) { inverse_dct<64, 2>(block); }
+inline void forward_dct3_16(float* block) { forward_dct<16, 3>(block); }
+inline void inverse_dct3_16(float* block) { inverse_dct<16, 3>(block); }
+inline void forward_dct2_64(float* block) { forward_dct<64, 2>(block); }
+inline void inverse_dct2_64(float* block) { inverse_dct<64, 2>(block); }
 
 }  // namespace mcpp::codec
 
