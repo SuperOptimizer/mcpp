@@ -66,6 +66,34 @@ consteval const std::array<std::uint16_t, block_total<N, Rank>()>& scan_for() {
     else static_assert(N == 16, "unsupported scan configuration");
 }
 
+// Number of band buckets for entropy-context selection (must match
+// coef_coder.hpp kBandBuckets). Kept here so the bucket-per-scan-step table can
+// be consteval (the coef coder includes scan.hpp).
+inline constexpr int kScanBandBuckets = 8;
+
+// Precomputed entropy-context bucket for each SCAN STEP (not each position):
+// bucket = band(scan[s]) * buckets / (max_band+1). Replaces a per-position
+// Rank-loop %// + divide in the hot coef-coder loops with one array load.
+template <std::size_t N, std::size_t Rank>
+consteval std::array<std::uint8_t, block_total<N, Rank>()> make_scan_bucket() {
+    const auto& scan = (N == 16 && Rank == 3) ? kScan16x3 : kScan64x2;
+    constexpr int maxb = int(Rank * (N - 1));
+    std::array<std::uint8_t, block_total<N, Rank>()> bk{};
+    for (std::size_t s = 0; s < bk.size(); ++s) {
+        bk[s] = std::uint8_t(coeff_band<N, Rank>(scan[s]) * kScanBandBuckets / (maxb + 1));
+    }
+    return bk;
+}
+inline constexpr auto kScanBucket16x3 = make_scan_bucket<16, 3>();
+inline constexpr auto kScanBucket64x2 = make_scan_bucket<64, 2>();
+
+template <std::size_t N, std::size_t Rank>
+consteval const std::array<std::uint8_t, block_total<N, Rank>()>& scan_bucket_for() {
+    if constexpr (N == 16 && Rank == 3) return kScanBucket16x3;
+    else if constexpr (N == 64 && Rank == 2) return kScanBucket64x2;
+    else static_assert(N == 16, "unsupported scan configuration");
+}
+
 }  // namespace mcpp::codec
 
 #endif  // MCPP_CODEC_SCAN_HPP

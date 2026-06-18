@@ -116,8 +116,8 @@ inline std::uint32_t decode_magnitude(RangeDecoder& dec, CoefModel& mdl) {
 template <std::size_t N, std::size_t Rank>
 void encode_coeffs(RangeEncoder& enc, CoefModel& mdl, const std::int32_t* idx) {
     const auto& scan = scan_for<N, Rank>();
+    const auto& sbk = scan_bucket_for<N, Rank>();
     constexpr std::size_t total = block_total<N, Rank>();
-    const int maxb = max_band<N, Rank>();
 
     // last nonzero scan position (so we can EOB after it).
     std::size_t last_nz = 0;
@@ -127,8 +127,7 @@ void encode_coeffs(RangeEncoder& enc, CoefModel& mdl, const std::int32_t* idx) {
 
     for (std::size_t s = 0; s < total; ++s) {
         const std::uint16_t pos = scan[s];
-        const int band = coeff_band<N, Rank>(pos);
-        const int bk = CoefModel::bucket_for_band(band, maxb);
+        const int bk = sbk[s];   // precomputed band bucket for this scan step
         const std::int32_t c = idx[pos];
 
         // significance bit (1 = nonzero)
@@ -148,15 +147,14 @@ void encode_coeffs(RangeEncoder& enc, CoefModel& mdl, const std::int32_t* idx) {
 template <std::size_t N, std::size_t Rank>
 void decode_coeffs(RangeDecoder& dec, CoefModel& mdl, std::int32_t* idx) {
     const auto& scan = scan_for<N, Rank>();
+    const auto& sbk = scan_bucket_for<N, Rank>();
     constexpr std::size_t total = block_total<N, Rank>();
-    const int maxb = max_band<N, Rank>();
 
     for (std::size_t i = 0; i < total; ++i) idx[i] = 0;
 
     for (std::size_t s = 0; s < total; ++s) {
         const std::uint16_t pos = scan[s];
-        const int band = coeff_band<N, Rank>(pos);
-        const int bk = CoefModel::bucket_for_band(band, maxb);
+        const int bk = sbk[s];   // precomputed band bucket for this scan step
 
         const int sig = dec.decode_bit(mdl.sig[std::size_t(bk)]);
         if (sig) {
